@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Protocol
 
 import httpx
@@ -35,9 +36,10 @@ class WeaviateVectorStore:
     async def hybrid_search(self, query: str, vector: list[float], tenant_id: str, document_ids: list[str], limit: int, alpha: float) -> list[dict[str, Any]]:
         if not document_ids:
             return []
-        escaped_ids = ", ".join(f'"{document_id}"' for document_id in document_ids)
+        escaped_ids = json.dumps(document_ids)
+        escaped_query = json.dumps(query)
         graphql = {
-            "query": f"""{{ Get {{ {self.collection}(hybrid: {{query: {query!r}, vector: {vector}, alpha: {alpha}}}, where: {{operator: And, operands: [{{path: [\"tenant_id\"], operator: Equal, valueText: \"{tenant_id}\"}}, {{path: [\"document_id\"], operator: ContainsAny, valueText: [{escaped_ids}]}}]}}, limit: {limit}) {{ chunk_id document_id text document_name page_number heading_path content_hash _additional {{ score }} }} }} }}"""
+            "query": f"""{{ Get {{ {self.collection}(hybrid: {{query: {escaped_query}, vector: {vector}, alpha: {alpha}}}, where: {{operator: And, operands: [{{path: [\"tenant_id\"], operator: Equal, valueText: {json.dumps(tenant_id)}}}, {{path: [\"document_id\"], operator: ContainsAny, valueTextArray: {escaped_ids}}}]}}, limit: {limit}) {{ chunk_id document_id text document_name page_number heading_path content_hash _additional {{ score }} }} }} }}"""
         }
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(f"{self.url}/v1/graphql", headers=self._headers(), json=graphql)

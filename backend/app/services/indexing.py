@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from uuid import NAMESPACE_URL, uuid5
 
 from app.core.errors import AppError
 from app.domain import DocumentStatus, utc_now
@@ -36,7 +37,7 @@ class IndexingService:
             objects: list[dict[str, Any]] = []
             for record, vector in zip(batch, vectors, strict=True):
                 source = record.get("source", {})
-                objects.append({"id": record["_id"], "vector": vector, "properties": {"chunk_id": record["_id"], "document_id": document_id, "tenant_id": tenant_id, "chunking_version": version, "text": record["text"], "document_name": document.get("name"), "page_number": source.get("page_number"), "heading_path": source.get("heading_path", []), "content_hash": record.get("content_hash"), "embedding_model": self.embedding_model}})
+                objects.append({"id": str(uuid5(NAMESPACE_URL, record["_id"])), "vector": vector, "properties": {"chunk_id": record["_id"], "document_id": document_id, "tenant_id": tenant_id, "chunking_version": version, "text": record["text"], "document_name": document.get("name"), "page_number": source.get("page_number"), "heading_path": source.get("heading_path", []), "content_hash": record.get("content_hash"), "embedding_model": self.embedding_model}})
             await self.vector_store.upsert(objects)
         completed = utc_now()
         await self.documents.update(document_id, {"status": DocumentStatus.READY.value, "ready_for_ai": True, "embedding_model": self.embedding_model, "indexed_at": completed, "updated_at": completed})

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
         default="mongodb://localhost:27017",
         validation_alias=AliasChoices("MONGODB_URI", "MONGO_URI"),
     )
-    mongo_database: str = "doc_process_rag"
+    mongo_database: str = Field("doc_process_rag", validation_alias=AliasChoices("MONGODB_DATABASE", "MONGO_DATABASE"))
     local_storage_dir: str = "./storage"
     default_tenant_id: str = "tenant_development"
     worker_count: int = 1
