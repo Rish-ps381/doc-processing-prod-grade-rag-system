@@ -64,3 +64,19 @@ class ChunkRepository(MongoRepository):
 class ChunkingJobRepository(MongoRepository):
     def __init__(self, database: AsyncIOMotorDatabase):
         super().__init__(database, "chunking_jobs")
+
+
+class ConversationRepository(MongoRepository):
+    def __init__(self, database: AsyncIOMotorDatabase):
+        super().__init__(database, "conversations")
+
+    async def list_for_user(self, tenant_id: str, user_id: str, *, limit: int = 50) -> list[dict[str, Any]]:
+        return await self.collection.find({"tenant_id": tenant_id, "user_id": user_id}).sort("updated_at", -1).to_list(length=limit)
+
+
+class MessageRepository(MongoRepository):
+    def __init__(self, database: AsyncIOMotorDatabase):
+        super().__init__(database, "messages")
+
+    async def list_for_conversation(self, conversation_id: str, tenant_id: str, *, limit: int = 100) -> list[dict[str, Any]]:
+        return await self.collection.find({"conversation_id": conversation_id, "tenant_id": tenant_id}).sort("created_at", 1).to_list(length=limit)

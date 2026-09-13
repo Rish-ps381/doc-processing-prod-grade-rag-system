@@ -1,21 +1,26 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.ingest import router as ingest_router
+from app.api.chat import router as chat_router
 from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler
 from app.db.mongo import create_database, create_indexes
-from app.repositories.mongo import ChunkRepository, ChunkingJobRepository, DocumentPageRepository, DocumentRepository, IngestionJobRepository
+from app.repositories.mongo import ChunkRepository, ChunkingJobRepository, ConversationRepository, DocumentPageRepository, DocumentRepository, IngestionJobRepository, MessageRepository
 from app.providers.embeddings import OpenAIEmbeddingProvider
 from app.providers.reranker import CohereReranker
 from app.providers.vector_store import WeaviateVectorStore
+from app.providers.llm import OpenAILLMProvider
 from app.services.chunking.service import ChunkingService
 from app.services.chunking.splitter import ChunkingSplitter
 from app.services.chunking.tokenizer import TiktokenTokenizer
 from app.services.ingestion import IngestionService
 from app.services.indexing import IndexingService
+from app.services.chat import ChatService
+from app.services.retrieval import RetrievalService
 from app.services.parser_factory import ParserFactory
 from app.storage.base import LocalObjectStorage
 from app.workers.chunking_worker import ChunkingWorker
@@ -46,6 +51,24 @@ async def lifespan(app: FastAPI):
         settings.embedding_batch_size,
         settings.embedding_model,
     )
+    retrieval_service = RetrievalService(
+        WeaviateVectorStore(settings.weaviate_url, settings.weaviate_collection, settings.weaviate_api_key),
+        OpenAIEmbeddingProvider(settings.embedding_api_key, settings.embedding_model),
+        CohereReranker(settings.reranker_api_key, settings.reranker_model),
+        settings.retrieval_top_k,
+        settings.rerank_top_k,
+        settings.final_context_k,
+        settings.hybrid_alpha,
+        settings.evidence_min_score,
+    )
+    app.state.chat_service = ChatService(
+        DocumentRepository(database),
+        ConversationRepository(database),
+        MessageRepository(database),
+        retrieval_service,
+        OpenAILLMProvider(settings.llm_api_key, settings.llm_model),
+        str(Path(__file__).resolve().parents[2] / "prompts" / "grounded_answer_v1.yaml"),
+    )
     chunking_service.set_indexing_service(indexing_service)
     service.set_chunking_service(chunking_service)
     queue = InProcessJobQueue(IngestionWorker(service).process)
@@ -74,6 +97,7 @@ app.add_middleware(
 )
 app.add_exception_handler(AppError, app_error_handler)
 app.include_router(ingest_router)
+app.include_router(chat_router)
 
 
 @app.get("/health")

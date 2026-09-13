@@ -1,5 +1,78 @@
 # doc-process-rag
 
+Document Intelligence / RAG platform with asynchronous ingestion, canonical document pages, structure-aware chunks, provider abstractions, hybrid Weaviate retrieval, reranking, grounded structured answers, and source citations.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  UI[Browser UI] --> API[FastAPI]
+  API --> M[(MongoDB)]
+  API --> Q[In-process job queue]
+  Q --> P[Parsers]
+  P --> C[Canonical pages]
+  C --> CH[Chunking]
+  CH --> E[Embedding provider]
+  E --> W[(Weaviate dense + BM25)]
+  UI --> CHAT[Chat service]
+  CHAT --> W
+  CHAT --> R[Reranker]
+  R --> L[Structured LLM]
+  L --> V[Citation validation]
+```
+
+The application is a modular monolith. MongoDB is authoritative for documents, pages, chunks, jobs, conversations, and messages. Weaviate is authoritative for searchable vectors. A document is queryable only after parsing, chunking, embedding, and indexing all succeed and its persisted state is `READY`.
+
+## Local setup
+
+1. Copy `.env.example` to `.env` and configure the provider keys.
+2. Start infrastructure with `docker compose up mongodb redis weaviate`.
+3. Install dependencies with `python -m pip install -r backend/requirements.txt`.
+4. Start the API from `backend`: `uvicorn app.main:app --reload`.
+5. Open `frontend/index.html` or serve `frontend` with a static server.
+
+The API exposes `/health` and `/version`. The development UI uses a fixed development tenant/user; authentication and membership resolution remain a deployment step, described under Known limitations.
+
+## API
+
+- `POST /ingest/create` accepts PDF, Markdown, or HTTP(S) URL sources and returns `202` with a job ID.
+- `GET /ingest/{job_id}` reports ingestion and authoritative document readiness.
+- `POST /chat/conversations` creates a scoped conversation.
+- `GET /chat/conversations` lists development conversations.
+- `GET /chat/conversations/{conversation_id}` retrieves metadata.
+- `GET /chat/conversations/{conversation_id}/messages` retrieves messages.
+- `POST /chat/conversations/{conversation_id}/messages` retrieves, reranks, grounds, validates, and persists an answer.
+
+The chat endpoint rejects any selected document that is not `READY` with `DOCUMENT_NOT_READY`; it never trusts frontend state. Empty or low-scoring evidence produces `INSUFFICIENT_EVIDENCE`, and generated citations must match retrieved chunks.
+
+## Configuration
+
+Model names and providers are configured through `.env`: `LLM_MODEL`, `EMBEDDING_MODEL`, `RERANKER_MODEL`, retrieval limits, `HYBRID_ALPHA`, chunking limits, and provider API keys. Prompt policy is versioned in `prompts/grounded_answer_v1.yaml`. Credentials are never stored in source control.
+
+## Tests
+
+```powershell
+Set-Location backend
+python -m pytest -q
+```
+
+The current suite covers parsers, canonical ingestion contracts, token-aware chunking, provenance, and API validation. Provider calls should be covered with mocked HTTP responses in deployment-specific integration tests.
+
+## Data model
+
+MongoDB collections include `documents`, `document_pages`, `chunks`, `ingestion_jobs`, `chunking_jobs`, `conversations`, and `messages`. Every retrieval-sensitive record carries `tenant_id`. Chunk records retain page, heading, block, version, token count, and deterministic content hash metadata.
+
+Each Weaviate object contains `chunk_id`, `document_id`, `tenant_id`, `text`, `document_name`, `page_number`, `heading_path`, `chunking_version`, `content_hash`, and `embedding_model`. Hybrid alpha and all retrieval limits are experimentable settings.
+
+## Known limitations
+
+- The repository still uses an in-process queue rather than Celery, so jobs are lost when the API process stops. The queue protocol is isolated in `app/workers/queue.py` for replacement with Redis/Celery.
+- Authentication is not yet implemented; the current API uses a development tenant/user and must not be deployed publicly.
+- Weaviate collection creation and Redis caching are integration work still required before a production deployment. Provider failures are explicit rather than silently replaced with fake AI.
+- SSE token streaming, Ragas evaluation, object-storage/S3, and complete SSRF network policy are not yet implemented.
+- The Weaviate deployment should be configured with authentication and TLS outside local Compose.
+# doc-process-rag
+
 Sprint 1 of a production-oriented document ingestion system. The application accepts PDF files, Markdown files, and web URLs, parses them into one canonical representation, and stores the result in MongoDB for Sprint 2 chunking.
 
 ## Scope

@@ -8,14 +8,14 @@
   </head>
   <body>
     <main class="shell">
-      <header class="masthead"><span class="eyebrow">DOC PROCESS RAG</span><h1>Document Desk</h1><p>Prepare a source for questions. Sprint 1 handles ingestion only.</p></header>
+      <header class="masthead"><span class="eyebrow">DOC PROCESS RAG</span><h1>Document Desk</h1><p>Grounded answers from the sources you select.</p></header>
       <section class="workspace">
         <aside class="sources panel"><div class="panel-heading"><h2>Sources</h2><span id="source-count">0</span></div>
           <form id="upload-form"><label class="dropzone" for="file-input"><strong>Drop a PDF or Markdown file</strong><span>or browse from your device</span><input id="file-input" type="file" accept=".pdf,.md,.markdown" /></label><button type="submit">Upload document</button></form>
           <form id="url-form" class="url-form"><label for="url-input">Add a web source</label><div class="url-row"><input id="url-input" type="url" placeholder="https://example.com/article" required /><button type="submit">Add</button></div></form>
           <div id="source-list" class="source-list"></div>
         </aside>
-        <section class="chat panel"><div class="chat-heading"><div><span class="eyebrow">READY WHEN YOUR SOURCE IS</span><h2>Ask your documents</h2></div><span class="status-dot">S1</span></div><div id="readiness" class="readiness">Select a completed document to enable questions.</div><div class="chat-space"><p>Retrieval and answers arrive in Sprint 2.</p></div><form id="chat-form" class="chat-form"><input id="chat-input" disabled placeholder="Questions will be enabled when processing completes" /><button id="ask-button" disabled>Ask</button></form></section>
+        <section class="chat panel"><div class="chat-heading"><div><span class="eyebrow">EVIDENCE FIRST</span><h2>Ask your documents</h2></div><span class="status-dot">RAG</span></div><div id="readiness" class="readiness">Select a ready document to enable questions.</div><div id="message-list" class="chat-space"><p>Upload a source, wait for Ready, then ask a question.</p></div><form id="chat-form" class="chat-form"><input id="chat-input" disabled placeholder="Ask a question about the selected sources" /><button id="ask-button" disabled>Ask</button></form></section>
       </section>
     </main>
     <script src="config.js"></script>

@@ -11,6 +11,8 @@ async def create_indexes(database: AsyncIOMotorDatabase) -> None:
     await database.chunks.create_index([("document_id", 1), ("chunking_version", 1)])
     await database.chunking_jobs.create_index([("document_id", 1), ("version", 1), ("created_at", -1)])
     await database.chunking_jobs.create_index([("tenant_id", 1), ("status", 1)])
+    await database.conversations.create_index([("tenant_id", 1), ("user_id", 1), ("updated_at", -1)])
+    await database.messages.create_index([("tenant_id", 1), ("conversation_id", 1), ("created_at", 1)])
 
 
 def create_database(uri: str, database_name: str) -> tuple[AsyncIOMotorClient, AsyncIOMotorDatabase]:
