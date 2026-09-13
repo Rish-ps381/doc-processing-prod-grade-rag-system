@@ -54,4 +54,10 @@ async def get_ingestion(job_id: str, request: Request) -> dict:
     job = await service(request).get_job(job_id)
     if job is None:
         raise AppError("INGESTION_JOB_NOT_FOUND", "The ingestion job does not exist.", 404)
-    return {"job_id": job.id, "document_id": job.document_id, "status": job.status.value, "error": job.error.model_dump() if job.error else None, "created_at": job.created_at, "started_at": job.started_at, "completed_at": job.completed_at}
+    response = {"job_id": job.id, "document_id": job.document_id, "status": job.status.value, "error": job.error.model_dump() if job.error else None, "created_at": job.created_at, "started_at": job.started_at, "completed_at": job.completed_at}
+    get_status = getattr(service(request), "get_document_status", None)
+    if get_status is not None:
+        document_status = await get_status(job.document_id)
+        if document_status:
+            response.update(document_status)
+    return response

@@ -22,9 +22,13 @@ class ChunkingService:
         self.settings = settings
         self.tenant_id = tenant_id
         self.queue = None
+        self.indexing_service = None
 
     def set_queue(self, queue: object) -> None:
         self.queue = queue
+
+    def set_indexing_service(self, service: object) -> None:
+        self.indexing_service = service
 
     async def queue_document(self, document_id: str, tenant_id: str | None = None) -> None:
         record = await self.documents.get(document_id)
@@ -69,10 +73,15 @@ class ChunkingService:
             if not chunks:
                 raise AppError("NO_SOURCE_CONTENT", "Chunking produced no output for the document.", 422)
             await self.chunks.delete_for_document(document_id, version)
+            for chunk in chunks:
+                chunk["tenant_id"] = job_data.get("tenant_id", self.tenant_id)
             await self.chunks.insert_many(chunks)
             completed = utc_now()
             await self.jobs.update(job_id, {"status": ChunkingStatus.COMPLETED.value, "completed_at": completed, "updated_at": completed, "error": None})
             await self.documents.update(document_id, {"status": DocumentStatus.QUEUED.value, "chunking_status": ChunkingStatus.COMPLETED.value, "chunking_version": version, "ready_for_ai": False, "updated_at": completed})
+            if self.indexing_service is None:
+                raise AppError("INDEXING_NOT_CONFIGURED", "Document indexing is not configured.", 503)
+            await self.indexing_service.index_document(document_id, job_data.get("tenant_id", self.tenant_id), version)
             logger.info("Chunking completed", extra={"job_id": job_id, "document_id": document_id, "chunking_version": version, "chunk_count": len(chunks)})
         except AppError as exc:
             await self._fail(job_id, document_id, version, exc, attempt)

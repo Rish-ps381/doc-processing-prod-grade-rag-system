@@ -48,6 +48,12 @@ class IngestionService:
         data["id"] = data.pop("_id")
         return IngestionJobRecord.model_validate(data)
 
+    async def get_document_status(self, document_id: str) -> dict[str, object] | None:
+        document = await self.documents.get(document_id)
+        if document is None or document.get("tenant_id") != self.tenant_id:
+            return None
+        return {"status": document.get("status"), "ready_for_ai": bool(document.get("ready_for_ai", False))}
+
     async def process_job(self, job_id: str) -> None:
         job_data = await self.jobs.get(job_id)
         if not job_data:
