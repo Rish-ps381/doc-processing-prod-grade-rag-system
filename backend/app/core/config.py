@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     rerank_top_k: int = 10
     final_context_k: int = 5
     hybrid_alpha: float = 0.5
-    evidence_min_score: float = 0.15
+    evidence_min_score: float = 0.05
     retrieval_cache_ttl_seconds: int = 300
     readiness_cache_ttl_seconds: int = 60
     max_upload_bytes: int = 25 * 1024 * 1024

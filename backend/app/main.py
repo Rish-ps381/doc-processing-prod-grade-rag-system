@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -33,7 +34,11 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     client, database = create_database(settings.mongo_uri, settings.mongo_database)
     await create_indexes(database)
-    service = IngestionService(DocumentRepository(database), DocumentPageRepository(database), IngestionJobRepository(database), LocalObjectStorage(settings.local_storage_dir), ParserFactory(settings.web_timeout_seconds), settings.default_tenant_id)
+    await database.documents.update_many(
+        {"status": {"$in": ["PARSING", "CHUNKING", "EMBEDDING", "INDEXING"]}},
+        {"$set": {"status": "FAILED", "ready_for_ai": False, "processing_error": {"code": "PROCESS_INTERRUPTED", "message": "Processing was interrupted before the application restarted."}, "updated_at": datetime.now(timezone.utc)}},
+    )
+    service = IngestionService(DocumentRepository(database), DocumentPageRepository(database), IngestionJobRepository(database), LocalObjectStorage(settings.local_storage_dir), ParserFactory(settings.web_timeout_seconds), settings.default_tenant_id, ChunkingJobRepository(database))
     chunking_service = ChunkingService(
         DocumentRepository(database),
         DocumentPageRepository(database),
@@ -51,6 +56,7 @@ async def lifespan(app: FastAPI):
         settings.embedding_batch_size,
         settings.embedding_model,
     )
+    await indexing_service.vector_store.ensure_collection()
     retrieval_service = RetrievalService(
         WeaviateVectorStore(settings.weaviate_url, settings.weaviate_collection, settings.weaviate_api_key),
         OpenAIEmbeddingProvider(settings.embedding_api_key, settings.embedding_model),

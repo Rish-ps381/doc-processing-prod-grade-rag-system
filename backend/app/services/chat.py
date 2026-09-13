@@ -4,7 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.errors import AppError
 from app.domain import DocumentStatus, new_id, utc_now
@@ -14,14 +14,18 @@ from app.services.retrieval import Evidence, RetrievalService
 
 
 class Citation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     chunk_id: str
     document_id: str
 
 
 class GroundedAnswer(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     answer: str
     can_answer: bool
-    citations: list[Citation] = Field(default_factory=list)
+    citations: list[Citation]
 
 
 class ChatResult(BaseModel):

@@ -26,6 +26,8 @@ class IndexingService:
         document = await self.documents.get(document_id)
         if not document or document.get("tenant_id") != tenant_id:
             raise AppError("DOCUMENT_NOT_FOUND", "Document does not exist.", 404)
+        if not getattr(self.embeddings, "api_key", None):
+            raise AppError("EMBEDDING_NOT_CONFIGURED", "Set EMBEDDING_API_KEY before processing documents.", 503)
         await self.documents.update(document_id, {"status": DocumentStatus.EMBEDDING.value, "ready_for_ai": False, "updated_at": utc_now()})
         records = await self.chunks.find_for_document(document_id, version)
         if not records:
@@ -37,7 +39,8 @@ class IndexingService:
             objects: list[dict[str, Any]] = []
             for record, vector in zip(batch, vectors, strict=True):
                 source = record.get("source", {})
-                objects.append({"id": str(uuid5(NAMESPACE_URL, record["_id"])), "vector": vector, "properties": {"chunk_id": record["_id"], "document_id": document_id, "tenant_id": tenant_id, "chunking_version": version, "text": record["text"], "document_name": document.get("name"), "page_number": source.get("page_number"), "heading_path": source.get("heading_path", []), "content_hash": record.get("content_hash"), "embedding_model": self.embedding_model}})
+                chunk_id = record.get("chunk_id") or str(record["_id"])
+                objects.append({"id": str(uuid5(NAMESPACE_URL, chunk_id)), "vector": vector, "properties": {"chunk_id": chunk_id, "document_id": document_id, "tenant_id": tenant_id, "chunking_version": version, "text": record["text"], "document_name": document.get("name"), "page_number": source.get("page_number"), "heading_path": source.get("heading_path", []), "content_hash": record.get("content_hash"), "embedding_model": self.embedding_model}})
             await self.vector_store.upsert(objects)
         completed = utc_now()
         await self.documents.update(document_id, {"status": DocumentStatus.READY.value, "ready_for_ai": True, "embedding_model": self.embedding_model, "indexed_at": completed, "updated_at": completed})

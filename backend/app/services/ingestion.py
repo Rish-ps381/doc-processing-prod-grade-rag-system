@@ -4,7 +4,7 @@ from pathlib import Path
 
 from app.core.errors import AppError
 from app.domain import DocumentStatus, FileType, IngestionJobRecord, JobError, JobStatus, ParsedDocument, SourceType, new_id, utc_now
-from app.repositories.mongo import DocumentPageRepository, DocumentRepository, IngestionJobRepository
+from app.repositories.mongo import ChunkingJobRepository, DocumentPageRepository, DocumentRepository, IngestionJobRepository
 from app.services.chunking.service import ChunkingService
 from app.services.parser_factory import ParserFactory
 from app.storage.base import ObjectStorage
@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 class IngestionService:
-    def __init__(self, documents: DocumentRepository, pages: DocumentPageRepository, jobs: IngestionJobRepository, storage: ObjectStorage, parser_factory: ParserFactory, tenant_id: str):
+    def __init__(self, documents: DocumentRepository, pages: DocumentPageRepository, jobs: IngestionJobRepository, storage: ObjectStorage, parser_factory: ParserFactory, tenant_id: str, chunking_jobs: ChunkingJobRepository | None = None):
         self.documents, self.pages, self.jobs = documents, pages, jobs
         self.storage, self.parser_factory, self.tenant_id = storage, parser_factory, tenant_id
+        self.chunking_jobs = chunking_jobs
         self.chunking_service: ChunkingService | None = None
 
     def set_chunking_service(self, service: ChunkingService) -> None:
@@ -52,7 +53,23 @@ class IngestionService:
         document = await self.documents.get(document_id)
         if document is None or document.get("tenant_id") != self.tenant_id:
             return None
-        return {"status": document.get("status"), "ready_for_ai": bool(document.get("ready_for_ai", False))}
+        chunking_job = await self.chunking_jobs.latest_for_document(document_id, self.tenant_id) if self.chunking_jobs else None
+        chunking_error = chunking_job.get("error") if chunking_job else None
+        return {"document_status": document.get("status"), "chunking_status": document.get("chunking_status"), "ready_for_ai": bool(document.get("ready_for_ai", False)), "processing_error": document.get("processing_error") or chunking_error}
+
+    async def retry_job(self, job_id: str) -> IngestionJobRecord:
+        job = await self.get_job(job_id)
+        if job is None:
+            raise AppError("INGESTION_JOB_NOT_FOUND", "The ingestion job does not exist.", 404)
+        if self.chunking_service is None:
+            raise AppError("CHUNKING_NOT_CONFIGURED", "Document processing is not configured.", 503)
+        document = await self.documents.get(job.document_id)
+        if document is None or document.get("tenant_id") != self.tenant_id:
+            raise AppError("DOCUMENT_NOT_FOUND", "Document does not exist.", 404)
+        if job.status != JobStatus.COMPLETED or not await self.pages.collection.find_one({"document_id": job.document_id}):
+            raise AppError("INGESTION_NOT_RETRYABLE", "This ingestion job has no completed source content to retry.", 409)
+        await self.chunking_service.queue_document(job.document_id, self.tenant_id)
+        return job
 
     async def process_job(self, job_id: str) -> None:
         job_data = await self.jobs.get(job_id)

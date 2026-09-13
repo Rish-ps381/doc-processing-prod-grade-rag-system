@@ -28,6 +28,8 @@ class OpenAIEmbeddingProvider:
                 headers={"Authorization": f"Bearer {self.api_key}"},
                 json={"model": self.model, "input": texts},
             )
+        if response.status_code == 429:
+            raise AppError("EMBEDDING_QUOTA_EXCEEDED", "The embedding provider has no remaining credits. Add credits or configure a different embedding provider.", 429)
         if response.status_code >= 400:
             raise AppError("EMBEDDING_FAILED", "The embedding provider rejected the request.", 502)
         payload = response.json()
