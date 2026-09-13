@@ -57,7 +57,7 @@ class IngestionService:
         now = utc_now()
         attempt = job_data.get("attempt", 0) + 1
         await self.jobs.update(job_id, {"status": JobStatus.PROCESSING.value, "attempt": attempt, "started_at": now, "updated_at": now})
-        await self.documents.update(job_data["document_id"], {"status": DocumentStatus.PROCESSING.value, "updated_at": now})
+        await self.documents.update(job_data["document_id"], {"status": DocumentStatus.PARSING.value, "updated_at": now})
         try:
             source_type = document["source_type"]
             file_type = document.get("file_type")
@@ -67,7 +67,7 @@ class IngestionService:
             await self._persist_parsed(job_data["document_id"], parsed)
             completed = utc_now()
             await self.jobs.update(job_id, {"status": JobStatus.COMPLETED.value, "completed_at": completed, "updated_at": completed, "error": None})
-            await self.documents.update(job_data["document_id"], {"status": DocumentStatus.COMPLETED.value, "language": parsed.language, "title": parsed.title, "content_stats": {"page_count": len(parsed.pages), "character_count": parsed.character_count}, "chunking_status": "PENDING", "ready_for_ai": False, "updated_at": completed})
+            await self.documents.update(job_data["document_id"], {"status": DocumentStatus.QUEUED.value, "language": parsed.language, "title": parsed.title, "content_stats": {"page_count": len(parsed.pages), "character_count": parsed.character_count}, "chunking_status": "PENDING", "ready_for_ai": False, "updated_at": completed})
             if self.chunking_service is not None:
                 await self.chunking_service.queue_document(job_data["document_id"], self.tenant_id)
         except AppError as exc:

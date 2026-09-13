@@ -60,7 +60,7 @@ class ChunkingService:
         version = job_data["version"]
         attempt = job_data.get("attempt", 0) + 1
         await self.jobs.update(job_id, {"status": ChunkingStatus.PROCESSING.value, "attempt": attempt, "started_at": now, "updated_at": now})
-        await self.documents.update(document_id, {"chunking_status": ChunkingStatus.PROCESSING.value, "updated_at": now})
+        await self.documents.update(document_id, {"status": DocumentStatus.CHUNKING.value, "chunking_status": ChunkingStatus.PROCESSING.value, "ready_for_ai": False, "updated_at": now})
         try:
             page_docs = await self.pages.collection.find({"document_id": document_id}).sort("page_number", 1).to_list(length=None)
             if not page_docs:
@@ -72,7 +72,7 @@ class ChunkingService:
             await self.chunks.insert_many(chunks)
             completed = utc_now()
             await self.jobs.update(job_id, {"status": ChunkingStatus.COMPLETED.value, "completed_at": completed, "updated_at": completed, "error": None})
-            await self.documents.update(document_id, {"status": DocumentStatus.COMPLETED.value, "chunking_status": ChunkingStatus.COMPLETED.value, "chunking_version": version, "ready_for_ai": True, "updated_at": completed})
+            await self.documents.update(document_id, {"status": DocumentStatus.QUEUED.value, "chunking_status": ChunkingStatus.COMPLETED.value, "chunking_version": version, "ready_for_ai": False, "updated_at": completed})
             logger.info("Chunking completed", extra={"job_id": job_id, "document_id": document_id, "chunking_version": version, "chunk_count": len(chunks)})
         except AppError as exc:
             await self._fail(job_id, document_id, version, exc, attempt)

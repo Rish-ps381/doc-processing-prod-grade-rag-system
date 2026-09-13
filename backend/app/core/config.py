@@ -23,6 +23,30 @@ class Settings(BaseSettings):
     chunk_max_tokens: int = 800
     chunk_overlap_tokens: int = 100
     chunking_version: str = "v1"
+    app_version: str = "0.1.0"
+    cors_origins: str = "http://127.0.0.1:5173,http://localhost:5173"
+    redis_url: str = "redis://localhost:6379/0"
+    weaviate_url: str = "http://localhost:8080"
+    weaviate_api_key: str | None = None
+    weaviate_collection: str = "RetrievalChunk"
+    embedding_provider: str = "openai"
+    embedding_model: str = "text-embedding-3-small"
+    embedding_api_key: str | None = None
+    embedding_batch_size: int = 32
+    llm_provider: str = "openai"
+    llm_model: str = "gpt-4o-mini"
+    llm_api_key: str | None = None
+    reranker_provider: str = "cohere"
+    reranker_model: str = "rerank-v3.5"
+    reranker_api_key: str | None = None
+    retrieval_top_k: int = 20
+    rerank_top_k: int = 10
+    final_context_k: int = 5
+    hybrid_alpha: float = 0.5
+    evidence_min_score: float = 0.15
+    retrieval_cache_ttl_seconds: int = 300
+    readiness_cache_ttl_seconds: int = 60
+    max_upload_bytes: int = 25 * 1024 * 1024
 
     @model_validator(mode="after")
     def validate_chunking(self) -> "Settings":
@@ -34,7 +58,15 @@ class Settings(BaseSettings):
             raise ValueError("Chunk target size cannot be larger than the maximum chunk size.")
         if self.chunk_overlap_tokens >= self.chunk_target_tokens:
             raise ValueError("Chunk overlap must be smaller than the target chunk size.")
+        if not 0 <= self.hybrid_alpha <= 1:
+            raise ValueError("Hybrid alpha must be between zero and one.")
+        if min(self.retrieval_top_k, self.rerank_top_k, self.final_context_k) <= 0:
+            raise ValueError("Retrieval limits must be greater than zero.")
         return self
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @property
     def chunking_config(self) -> dict[str, int | str]:

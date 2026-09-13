@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from hashlib import sha256
 from typing import Any
 
 from app.core.errors import AppError
@@ -185,6 +186,7 @@ class ChunkingSplitter:
             text=text.strip(),
             token_count=token_count,
             source={"page_number": page_number, "heading_path": heading_path, "block_ids": block_ids},
+            content_hash=sha256(f"{version}\0{document_id}\0{text.strip()}".encode("utf-8")).hexdigest(),
         )
         return layer.model_dump(exclude_none=True)
 

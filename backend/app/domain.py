@@ -27,8 +27,11 @@ class FileType(str, Enum):
 
 class DocumentStatus(str, Enum):
     QUEUED = "QUEUED"
-    PROCESSING = "PROCESSING"
-    COMPLETED = "COMPLETED"
+    PARSING = "PARSING"
+    CHUNKING = "CHUNKING"
+    EMBEDDING = "EMBEDDING"
+    INDEXING = "INDEXING"
+    READY = "READY"
     FAILED = "FAILED"
 
 
@@ -151,5 +154,6 @@ class DocumentChunk(BaseModel):
     source: ChunkSource
     previous_chunk_id: str | None = None
     next_chunk_id: str | None = None
+    content_hash: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)

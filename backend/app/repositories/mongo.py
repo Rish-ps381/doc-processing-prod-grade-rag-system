@@ -16,6 +16,9 @@ class MongoRepository:
     async def update(self, identifier: str, updates: dict[str, Any]) -> None:
         await self.collection.update_one({"_id": identifier}, {"$set": updates})
 
+    async def list_for_tenant(self, tenant_id: str, *, limit: int = 100) -> list[dict[str, Any]]:
+        return await self.collection.find({"tenant_id": tenant_id}).sort("created_at", -1).to_list(length=limit)
+
 
 class DocumentRepository(MongoRepository):
     def __init__(self, database: AsyncIOMotorDatabase):
@@ -53,6 +56,9 @@ class ChunkRepository(MongoRepository):
     async def find_for_document(self, document_id: str, version: str) -> list[dict[str, Any]]:
         cursor = self.collection.find({"document_id": document_id, "chunking_version": version}).sort("chunk_index", 1)
         return await cursor.to_list(length=None)
+
+    async def find_by_ids(self, chunk_ids: list[str], tenant_id: str) -> list[dict[str, Any]]:
+        return await self.collection.find({"_id": {"$in": chunk_ids}, "tenant_id": tenant_id}).to_list(length=None)
 
 
 class ChunkingJobRepository(MongoRepository):
